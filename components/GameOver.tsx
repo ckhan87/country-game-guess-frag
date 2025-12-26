@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { TOTAL_QUESTIONS } from '../constants';
 
 interface GameOverProps {
   score: number;
@@ -9,7 +10,7 @@ interface GameOverProps {
 }
 
 export const GameOver: React.FC<GameOverProps> = ({ score, correctCount, onRestartSame, onBackToMenu }) => {
-  const accuracy = Math.round((correctCount / 20) * 100);
+  const accuracy = Math.round((correctCount / TOTAL_QUESTIONS) * 100);
 
   return (
     <div className="fixed inset-0 bg-black/90 z-50 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-500">
@@ -19,10 +20,9 @@ export const GameOver: React.FC<GameOverProps> = ({ score, correctCount, onResta
         
         <div className="bg-white/5 py-12 rounded-[2.5rem] mb-10 border border-white/10">
           <div className="text-[12px] text-white/40 uppercase font-black mb-1">最终得分</div>
-          {/* DOUBLED FINAL SCORE SIZE */}
           <div className="text-[8rem] md:text-[14rem] font-black text-white text-glow-blue leading-none">{score}</div>
           <div className="text-xl text-blue-300 mt-10 font-bold">
-            正确率: <span className="text-white">{accuracy}% ({correctCount}/20)</span>
+            正确率: <span className="text-white">{accuracy}% ({correctCount}/{TOTAL_QUESTIONS})</span>
           </div>
         </div>
 

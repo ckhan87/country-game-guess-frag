@@ -5,24 +5,24 @@ export const TOTAL_QUESTIONS = 20;
 
 export const DIFFICULTY_CONFIG = {
   [Difficulty.EASY]: {
-    duration: 180,
+    duration: 8, // Level 1: 8 seconds
     optionCount: 3,
     multiplier: 1.0,
-    label: '入门',
+    label: '入门 (Level 1)',
     color: 'border-green-500 text-green-400'
   },
   [Difficulty.MEDIUM]: {
-    duration: 120,
+    duration: 5, // Level 2: 5 seconds
     optionCount: 4,
-    multiplier: 1.5,
-    label: '进阶',
+    multiplier: 1.0,
+    label: '进阶 (Level 2)',
     color: 'border-blue-500 text-blue-400'
   },
   [Difficulty.HARD]: {
-    duration: 60,
+    duration: 2, // Level 3: 2 seconds
     optionCount: 4,
-    multiplier: 2.5,
-    label: '大师',
+    multiplier: 1.0,
+    label: '大师 (Level 3)',
     color: 'border-red-500 text-red-400'
   }
 };

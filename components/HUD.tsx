@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { GameState } from '../types';
-import { DIFFICULTY_CONFIG } from '../constants';
+import { DIFFICULTY_CONFIG, TOTAL_QUESTIONS } from '../constants';
 
 interface HUDProps {
   state: GameState;
@@ -28,11 +28,12 @@ export const HUD: React.FC<HUDProps> = ({ state, onQuit }) => {
           <div className="glass px-6 py-3 rounded-3xl flex flex-col justify-center border-2 border-white/10 min-w-[120px]">
              <div className="flex items-center justify-between gap-3 mb-1">
                 <span className="text-[10px] md:text-xs text-blue-400 font-black uppercase tracking-widest">{config.label}</span>
-                <span className="text-[10px] md:text-xs text-white/50 font-bold">{progress}/20</span>
+                <span className="text-[10px] md:text-xs text-white/50 font-bold">{progress}/{TOTAL_QUESTIONS}</span>
              </div>
              {/* DOUBLED TIMER SIZE */}
              <div className="text-3xl md:text-6xl text-white font-mono font-black leading-none text-glow-blue">
-                {timeLeft}<span className="text-base md:text-2xl ml-1 opacity-50 font-sans">s</span>
+                {config.duration === null ? '∞' : timeLeft}
+                {config.duration !== null && <span className="text-base md:text-2xl ml-1 opacity-50 font-sans">s</span>}
              </div>
           </div>
         </div>
@@ -46,7 +47,6 @@ export const HUD: React.FC<HUDProps> = ({ state, onQuit }) => {
           )}
           <div className="glass px-6 py-4 rounded-[2rem] text-right border-2 border-blue-500/30">
             <div className="text-[10px] md:text-xs text-blue-300 font-bold uppercase tracking-tighter mb-1">SCORE</div>
-            {/* DOUBLED SCORE SIZE */}
             <div className="text-3xl md:text-6xl text-white font-black leading-none text-glow-blue">{score}</div>
           </div>
         </div>

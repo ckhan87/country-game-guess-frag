@@ -6,6 +6,12 @@ import * as THREE from 'three';
 
 const EARTH_URL = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
 
+// Defining intrinsic elements as any to bypass JSX type errors for Three.js tags in the current environment
+const MeshPhongMaterial = 'meshPhongMaterial' as any;
+const ShaderMaterial = 'shaderMaterial' as any;
+const AmbientLight = 'ambientLight' as any;
+const DirectionalLight = 'directionalLight' as any;
+
 interface GlobeProps {
   targetLocation: { lat: number; lon: number } | null;
   autoRotate: boolean;
@@ -53,7 +59,8 @@ const Globe: React.FC<GlobeProps> = ({ targetLocation, autoRotate }) => {
   return (
     <>
       <Sphere ref={meshRef} args={[100, 64, 64]}>
-        <meshPhongMaterial 
+        {/* Fix: use MeshPhongMaterial constant to avoid JSX intrinsic element error */}
+        <MeshPhongMaterial 
           map={texture} 
           shininess={15} 
           specular={new THREE.Color(0x333333)} 
@@ -61,7 +68,8 @@ const Globe: React.FC<GlobeProps> = ({ targetLocation, autoRotate }) => {
       </Sphere>
       
       <Sphere args={[103, 64, 64]}>
-        <shaderMaterial
+        {/* Fix: use ShaderMaterial constant to avoid JSX intrinsic element error */}
+        <ShaderMaterial
           args={[atmosphereShader]}
           transparent
           side={THREE.BackSide}
@@ -77,8 +85,10 @@ export const GlobeScene: React.FC<GlobeProps> = (props) => {
     <div className="fixed inset-0 z-0">
       <Canvas dpr={[1, 2]}>
         <PerspectiveCamera makeDefault position={[0, 0, 300]} fov={45} />
-        <ambientLight intensity={0.7} />
-        <directionalLight position={[10, 10, 10]} intensity={1.5} />
+        {/* Fix: use AmbientLight constant to avoid JSX intrinsic element error */}
+        <AmbientLight intensity={0.7} />
+        {/* Fix: use DirectionalLight constant to avoid JSX intrinsic element error */}
+        <DirectionalLight position={[10, 10, 10]} intensity={1.5} />
         <React.Suspense fallback={null}>
           <Globe {...props} />
         </React.Suspense>
