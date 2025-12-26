@@ -12,28 +12,46 @@ const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>({
     score: 0,
     streak: 0,
-    timeLeft: 120,
+    timeLeft: 0,
     progress: 0,
     correctCount: 0,
-    status: GameStatus.LOADING,
-    difficulty: Difficulty.MEDIUM
+    status: GameStatus.IDLE,
+    difficulty: Difficulty.EASY,
   });
 
-  const [sessionCountries, setSessionCountries] = useState<Country[]>([]);
-  const [currentOptions, setCurrentOptions] = useState<Country[]>([]);
-  const [feedback, setFeedback] = useState<{ text: string, type: 'correct' | 'wrong' } | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [currentTarget, setCurrentTarget] = useState<Country | null>(null);
+  const [options, setOptions] = useState<Country[]>([]);
+  const [isAnswered, setIsAnswered] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const timerRef = useRef<number | undefined>(undefined);
 
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const startNewGame = useCallback((diff: Difficulty) => {
-    audioService.stopAmbient();
-    audioService.stopGameOverMusic();
+  const generateQuestion = useCallback((diff: Difficulty) => {
     const config = DIFFICULTY_CONFIG[diff];
-    audioService.startAmbient();
-    const shuffled = [...COUNTRY_DATA].sort(() => 0.5 - Math.random());
-    const session = shuffled.slice(0, TOTAL_QUESTIONS);
-    setSessionCountries(session);
+    const target = COUNTRY_DATA[Math.floor(Math.random() * COUNTRY_DATA.length)];
+    
+    let opts = [target];
+    while (opts.length < config.optionCount) {
+      const random = COUNTRY_DATA[Math.floor(Math.random() * COUNTRY_DATA.length)];
+      if (!opts.find(o => o.id === random.id)) {
+        opts.push(random);
+      }
+    }
+    
+    setCurrentTarget(target);
+    setOptions(opts.sort(() => Math.random() - 0.5));
+    setIsAnswered(false);
+    setSelectedId(null);
+  }, []);
+
+  const endGame = useCallback(() => {
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    setGameState(prev => ({ ...prev, status: GameStatus.GAME_OVER }));
+    audioService.stopAmbient();
+    audioService.playGameOverMusic();
+  }, []);
+
+  const startNewGame = (diff: Difficulty) => {
+    const config = DIFFICULTY_CONFIG[diff];
     setGameState({
       score: 0,
       streak: 0,
@@ -41,191 +59,126 @@ const App: React.FC = () => {
       progress: 0,
       correctCount: 0,
       status: GameStatus.PLAYING,
-      difficulty: diff
+      difficulty: diff,
     });
-    setFeedback(null);
-  }, []);
-
-  const handleQuitToMenu = useCallback(() => {
-    audioService.stopAmbient();
+    audioService.startAmbient();
     audioService.stopGameOverMusic();
-    if (timerRef.current) clearInterval(timerRef.current);
-    setGameState(prev => ({ ...prev, status: GameStatus.IDLE }));
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setGameState(prev => ({ ...prev, status: GameStatus.IDLE }));
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, []);
+    generateQuestion(diff);
+  };
 
   useEffect(() => {
     if (gameState.status === GameStatus.PLAYING && gameState.timeLeft > 0) {
-      timerRef.current = setInterval(() => {
+      timerRef.current = window.setInterval(() => {
         setGameState(prev => {
-          const newTime = prev.timeLeft - 1;
+          if (prev.timeLeft <= 1) {
+            endGame();
+            return { ...prev, timeLeft: 0 };
+          }
+          if (prev.timeLeft <= 10) audioService.playTick(true);
+          else if (prev.timeLeft % 10 === 0) audioService.playTick(false);
           
-          if (newTime <= 10 && newTime > 0) {
-            audioService.playTick(true);
-          }
-
-          if (newTime <= 0) {
-            if (timerRef.current) clearInterval(timerRef.current);
-            return { ...prev, timeLeft: 0, status: GameStatus.GAME_OVER };
-          }
-          return { ...prev, timeLeft: newTime };
+          return { ...prev, timeLeft: prev.timeLeft - 1 };
         });
       }, 1000);
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
     }
-
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) window.clearInterval(timerRef.current);
     };
-  }, [gameState.status]);
+  }, [gameState.status, endGame]);
 
-  useEffect(() => {
-    if (gameState.status === GameStatus.GAME_OVER) {
-      audioService.stopAmbient();
-      audioService.playGameOverMusic();
-      const accuracy = (gameState.correctCount / TOTAL_QUESTIONS);
-      if (accuracy >= 0.8) {
-        setTimeout(() => audioService.playCelebration(), 500);
-      }
-    }
-  }, [gameState.status, gameState.correctCount]);
+  const handleSelect = (id: string) => {
+    if (isAnswered || !currentTarget) return;
+    setIsAnswered(true);
+    setSelectedId(id);
 
-  useEffect(() => {
-    if (gameState.status === GameStatus.PLAYING && sessionCountries.length > 0) {
-      const target = sessionCountries[gameState.progress];
-      if (target) {
-        const others = COUNTRY_DATA.filter(c => c.id !== target.id);
-        const config = DIFFICULTY_CONFIG[gameState.difficulty];
-        const shuffledOthers = others.sort(() => 0.5 - Math.random()).slice(0, config.optionCount - 1);
-        const options = [target, ...shuffledOthers].sort(() => 0.5 - Math.random());
-        setCurrentOptions(options);
-      }
-    }
-  }, [gameState.status, gameState.progress, sessionCountries, gameState.difficulty]);
-
-  const handleChoice = useCallback((id: string) => {
-    if (isProcessing) return;
-    setIsProcessing(true);
-
-    const target = sessionCountries[gameState.progress];
-    const isCorrect = id === target.id;
-    const config = DIFFICULTY_CONFIG[gameState.difficulty];
+    const isCorrect = id === currentTarget.id;
+    const nextProgress = gameState.progress + 1;
 
     if (isCorrect) {
       audioService.playCorrect();
-      setFeedback({ text: '正确！', type: 'correct' });
       setGameState(prev => ({
         ...prev,
-        score: Math.round(prev.score + (10 + (prev.streak * 5)) * config.multiplier),
+        score: prev.score + 10,
         streak: prev.streak + 1,
-        correctCount: prev.correctCount + 1
+        correctCount: prev.correctCount + 1,
+        progress: nextProgress
       }));
     } else {
       audioService.playWrong();
-      setFeedback({ text: '错误！', type: 'wrong' });
       setGameState(prev => ({
         ...prev,
-        streak: 0
+        streak: 0,
+        progress: nextProgress
       }));
     }
 
+    // Increased timeout to 1.5s so user can see the correct/wrong colors
     setTimeout(() => {
-      setFeedback(null);
-      setGameState(prev => {
-        const nextProgress = prev.progress + 1;
-        if (nextProgress >= TOTAL_QUESTIONS) {
-          return { ...prev, status: GameStatus.GAME_OVER };
-        }
-        return { ...prev, progress: nextProgress };
-      });
-      setIsProcessing(false);
-    }, 1200);
-  }, [gameState.progress, sessionCountries, isProcessing, gameState.difficulty]);
+      if (nextProgress >= TOTAL_QUESTIONS) {
+        endGame();
+      } else {
+        generateQuestion(gameState.difficulty);
+      }
+    }, 1500);
+  };
 
-  const currentTarget = sessionCountries[gameState.progress];
+  const handleBackToMenu = () => {
+    audioService.stopAmbient();
+    audioService.stopGameOverMusic();
+    setGameState(prev => ({ ...prev, status: GameStatus.IDLE }));
+    setCurrentTarget(null);
+  };
 
   return (
-    <div className="relative w-full h-screen bg-black overflow-hidden flex flex-col justify-center">
+    <div className="min-h-screen bg-[#050510] text-white overflow-hidden font-sans selection:bg-blue-500/30">
       <GlobeScene 
-        targetLocation={feedback?.type === 'correct' ? currentTarget : null}
-        autoRotate={gameState.status !== GameStatus.PLAYING || feedback === null}
+        targetLocation={currentTarget ? { lat: currentTarget.lat, lon: currentTarget.lon } : null} 
+        autoRotate={gameState.status === GameStatus.IDLE} 
       />
 
-      {gameState.status === GameStatus.LOADING && (
-        <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center">
-          <div className="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-6"></div>
-          <div className="text-blue-400 font-bold tracking-widest text-xs uppercase text-center px-4 animate-pulse">
-            正在连接卫星...<br />准备地球全景图中
-          </div>
-        </div>
-      )}
-
-      {gameState.status === GameStatus.PLAYING && (
-        <>
-          <HUD state={gameState} onQuit={handleQuitToMenu} />
-          {currentTarget && (
-            <QuizInterface 
-              currentTarget={currentTarget}
-              options={currentOptions}
-              onSelect={handleChoice}
-              disabled={isProcessing}
-            />
-          )}
-        </>
-      )}
-
-      {feedback && (
-        <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none animate-in zoom-in duration-300`}>
-          <div className={`text-6xl md:text-8xl font-black italic drop-shadow-2xl ${
-            feedback.type === 'correct' ? 'text-cyan-400' : 'text-red-500'
-          }`}>
-            {feedback.text}
-          </div>
-        </div>
-      )}
-
       {gameState.status === GameStatus.IDLE && (
-        <div className="z-10 text-center px-6">
-          <div className="glass p-8 md:p-12 rounded-[4rem] border border-white/20 inline-block max-w-xl w-full">
-            <h1 className="text-white text-4xl md:text-6xl font-black mb-2 tracking-tighter text-glow-blue">国家猜猜猜</h1>
-            <p className="text-blue-400 font-bold mb-8 tracking-widest uppercase text-xs">选择你的探险级别</p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-              {(Object.keys(DIFFICULTY_CONFIG) as Difficulty[]).map((level) => {
-                const conf = DIFFICULTY_CONFIG[level];
-                return (
-                  <button
-                    key={level}
-                    onClick={() => startNewGame(level)}
-                    className={`group relative glass p-6 rounded-3xl border-2 transition-all active:scale-95 flex flex-col items-center ${conf.color}`}
-                  >
-                    <span className="text-xs font-black uppercase tracking-tighter mb-2 opacity-60">
-                      {level}
-                    </span>
-                    <span className="text-2xl font-black mb-1">
-                      {conf.label}
-                    </span>
-                    <span className="text-[10px] font-bold opacity-80">
-                      {conf.duration}s | {conf.optionCount}选1
-                    </span>
-                    <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-3xl"></div>
-                  </button>
-                );
-              })}
-            </div>
-            
-            <div className="text-[10px] text-white/30 font-bold uppercase tracking-widest">
-              挑战越高，得分倍率越高
-            </div>
+        <div className="fixed inset-0 z-10 flex flex-col items-center justify-center p-6 bg-gradient-to-b from-transparent via-[#050510]/50 to-[#050510]">
+          <div className="text-center mb-12 animate-in fade-in slide-in-from-bottom-8 duration-1000">
+            <h1 className="text-8xl md:text-[12rem] font-black tracking-tighter mb-4 text-glow-blue leading-none">
+              GEO<span className="text-blue-500">QUEST</span>
+            </h1>
+            <p className="text-blue-300/60 font-bold tracking-[0.3em] text-xs md:text-sm uppercase text-glow-blue">
+              Global Geography Exploration Challenge
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-4xl animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-200">
+            {(Object.keys(DIFFICULTY_CONFIG) as Difficulty[]).map((diff) => {
+              const cfg = DIFFICULTY_CONFIG[diff];
+              return (
+                <button
+                  key={diff}
+                  onClick={() => startNewGame(diff)}
+                  className={`glass p-8 rounded-[2.5rem] border-2 ${cfg.color} hover:scale-105 transition-all duration-300 group relative overflow-hidden`}
+                >
+                  <div className={`absolute inset-0 bg-current opacity-0 group-hover:opacity-5 transition-opacity`} />
+                  <div className="text-3xl font-black mb-2">{cfg.label}</div>
+                  <div className="text-[10px] opacity-60 font-bold uppercase tracking-widest">
+                    {cfg.duration}s • {cfg.optionCount} 选项
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
+      )}
+
+      {gameState.status === GameStatus.PLAYING && currentTarget && (
+        <>
+          <HUD state={gameState} onQuit={handleBackToMenu} />
+          <QuizInterface 
+            currentTarget={currentTarget} 
+            options={options} 
+            onSelect={handleSelect}
+            disabled={isAnswered}
+            selectedId={selectedId}
+          />
+        </>
       )}
 
       {gameState.status === GameStatus.GAME_OVER && (
@@ -233,7 +186,7 @@ const App: React.FC = () => {
           score={gameState.score} 
           correctCount={gameState.correctCount} 
           onRestartSame={() => startNewGame(gameState.difficulty)} 
-          onBackToMenu={handleQuitToMenu}
+          onBackToMenu={handleBackToMenu}
         />
       )}
     </div>
